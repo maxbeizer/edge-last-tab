@@ -7,7 +7,9 @@ const workerSource = fs.readFileSync(new URL("./service-worker.js", import.meta.
 
 function createHarness(initialTabs, options = {}) {
   let tabs = structuredClone(initialTabs);
-  let stored = {};
+  let stored = options.initialHistory === undefined
+    ? {}
+    : { tabHistoryByWindow: structuredClone(options.initialHistory) };
   let nextTabId = Math.max(100, ...tabs.map(tab => tab.id + 1));
   let focusedWindowId = options.focusedWindowId ?? tabs.find(tab => tab.active)?.windowId;
   const windowIds = new Set(tabs.map(tab => tab.windowId));
@@ -269,6 +271,84 @@ test("tab history and commands use the focused window", async () => {
   harness.command("toggle-last-tab");
   await harness.settle();
   assert.deepEqual(harness.tabs().filter(tab => tab.active).map(tab => tab.id), [1, 3]);
+});
+
+test("moving the previous tab removes it from its old window history", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+    { id: 2, windowId: 10, active: false, pinned: false },
+    { id: 3, windowId: 20, active: true, pinned: false },
+  ]);
+
+  harness.activate(2);
+  harness.activate(1);
+  harness.activate(2);
+  await harness.settle();
+  harness.detach(1);
+  harness.attach(1, 20);
+  await harness.settle();
+
+  assert.deepEqual(harness.storage().tabHistoryByWindow, { 10: { current: 2 } });
+});
+
+test("moving the current tab reconciles both windows", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+    { id: 2, windowId: 10, active: false, pinned: false },
+    { id: 3, windowId: 20, active: true, pinned: false },
+    { id: 4, windowId: 20, active: false, pinned: false },
+  ]);
+
+  harness.activate(2);
+  harness.activate(1);
+  harness.activate(2);
+  harness.activate(4);
+  harness.activate(3);
+  await harness.settle();
+  harness.detach(2);
+  harness.attach(2, 20);
+  await harness.settle();
+
+  assert.deepEqual(harness.storage().tabHistoryByWindow, {
+    10: { current: 1 },
+    20: { current: 2, previous: 3 },
+  });
+});
+
+test("toggle removes a previous tab that moved to another window", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+    { id: 2, windowId: 20, active: true, pinned: false },
+  ], {
+    focusedWindowId: 10,
+    initialHistory: { 10: { current: 1, previous: 2 } },
+  });
+
+  harness.command("toggle-last-tab");
+  await harness.settle();
+
+  assert.deepEqual(harness.storage().tabHistoryByWindow, { 10: { current: 1 } });
+  assert.equal(harness.tabs().find(tab => tab.windowId === 10 && tab.active).id, 1);
+});
+
+test("tab replacement preserves current and previous history", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: false, pinned: false },
+    { id: 2, windowId: 10, active: true, pinned: false },
+  ], {
+    initialHistory: { 10: { current: 2, previous: 1 } },
+  });
+
+  harness.replace(1, { id: 101 });
+  harness.replace(2, { id: 102 });
+  await harness.settle();
+
+  assert.deepEqual(harness.storage().tabHistoryByWindow, {
+    10: { current: 102, previous: 101 },
+  });
+  harness.command("toggle-last-tab");
+  await harness.settle();
+  assert.equal(harness.tabs().find(tab => tab.active).id, 101);
 });
 
 test("close command retains pinned tabs in the focused window only", async () => {

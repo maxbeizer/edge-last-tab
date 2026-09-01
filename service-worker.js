@@ -14,16 +14,50 @@ async function saveHistory(history) {
   await chrome.storage.session.set({ [STORAGE_KEY]: history });
 }
 
+function recordActivation(history, windowId, tabId) {
+  const key = String(windowId);
+  const entry = history[key] || {};
+
+  if (entry.current === tabId) {
+    return false;
+  }
+  if (entry.current === undefined) {
+    delete entry.previous;
+  } else {
+    entry.previous = entry.current;
+  }
+  entry.current = tabId;
+  history[key] = entry;
+  return true;
+}
+
+function removeTabReference(history, windowId, tabId) {
+  const key = String(windowId);
+  const entry = history[key];
+
+  if (!entry) {
+    return false;
+  }
+
+  let changed = false;
+  if (entry.previous === tabId) {
+    delete entry.previous;
+    changed = true;
+  }
+  if (entry.current === tabId) {
+    delete entry.current;
+    changed = true;
+  }
+  if (entry.current === undefined && entry.previous === undefined) {
+    delete history[key];
+  }
+  return changed;
+}
+
 chrome.tabs.onActivated.addListener(activeInfo => {
   enqueue(async () => {
     const history = await loadHistory();
-    const windowId = String(activeInfo.windowId);
-    const entry = history[windowId] || {};
-
-    if (entry.current !== activeInfo.tabId) {
-      entry.previous = entry.current;
-      entry.current = activeInfo.tabId;
-      history[windowId] = entry;
+    if (recordActivation(history, activeInfo.windowId, activeInfo.tabId)) {
       await saveHistory(history);
     }
   });
@@ -32,22 +66,66 @@ chrome.tabs.onActivated.addListener(activeInfo => {
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   enqueue(async () => {
     const history = await loadHistory();
-    const windowId = String(removeInfo.windowId);
-    const entry = history[windowId];
+    if (removeTabReference(history, removeInfo.windowId, tabId)) {
+      await saveHistory(history);
+    }
+  });
+});
 
-    if (!entry) {
-      return;
+chrome.tabs.onDetached.addListener((tabId, detachInfo) => {
+  enqueue(async () => {
+    const history = await loadHistory();
+    if (removeTabReference(history, detachInfo.oldWindowId, tabId)) {
+      await saveHistory(history);
     }
-    if (entry.previous === tabId) {
-      delete entry.previous;
+  });
+});
+
+chrome.tabs.onAttached.addListener((tabId, attachInfo) => {
+  enqueue(async () => {
+    const history = await loadHistory();
+    let changed = false;
+
+    for (const windowId of Object.keys(history)) {
+      if (windowId !== String(attachInfo.newWindowId)) {
+        changed = removeTabReference(history, windowId, tabId) || changed;
+      }
     }
-    if (entry.current === tabId) {
-      delete entry.current;
+
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId === attachInfo.newWindowId && tab.active) {
+        changed = recordActivation(history, attachInfo.newWindowId, tabId) || changed;
+      }
+    } catch {
+      // A tab can disappear again before its attachment is processed.
     }
-    if (entry.current === undefined && entry.previous === undefined) {
-      delete history[windowId];
+
+    if (changed) {
+      await saveHistory(history);
     }
-    await saveHistory(history);
+  });
+});
+
+chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+  enqueue(async () => {
+    const history = await loadHistory();
+    let changed = false;
+
+    for (const entry of Object.values(history)) {
+      if (entry.current === removedTabId) {
+        entry.current = addedTabId;
+        changed = true;
+      }
+      if (entry.previous === removedTabId) {
+        entry.previous = addedTabId;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await saveHistory(history);
+    }
   });
 });
 
@@ -75,13 +153,16 @@ async function toggleLastTab() {
     const previousTab = await chrome.tabs.get(previousTabId);
     if (previousTab.windowId === activeTab.windowId) {
       await chrome.tabs.update(previousTabId, { active: true });
+      return;
     }
   } catch {
-    const entry = history[String(activeTab.windowId)];
-    if (entry) {
-      delete entry.previous;
-      await saveHistory(history);
-    }
+    // The stale entry is removed below.
+  }
+
+  const entry = history[String(activeTab.windowId)];
+  if (entry?.previous === previousTabId) {
+    delete entry.previous;
+    await saveHistory(history);
   }
 }
 
