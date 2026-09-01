@@ -137,21 +137,21 @@ chrome.windows.onRemoved.addListener(windowId => {
   });
 });
 
-async function toggleLastTab() {
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab || activeTab.windowId === undefined) {
+async function toggleLastTab(windowId) {
+  const [activeTab] = await chrome.tabs.query({ active: true, windowId });
+  if (!activeTab) {
     return;
   }
 
   const history = await loadHistory();
-  const previousTabId = history[String(activeTab.windowId)]?.previous;
+  const previousTabId = history[String(windowId)]?.previous;
   if (previousTabId === undefined) {
     return;
   }
 
   try {
     const previousTab = await chrome.tabs.get(previousTabId);
-    if (previousTab.windowId === activeTab.windowId) {
+    if (previousTab.windowId === windowId) {
       await chrome.tabs.update(previousTabId, { active: true });
       return;
     }
@@ -159,32 +159,37 @@ async function toggleLastTab() {
     // The stale entry is removed below.
   }
 
-  const entry = history[String(activeTab.windowId)];
+  const entry = history[String(windowId)];
   if (entry?.previous === previousTabId) {
     delete entry.previous;
     await saveHistory(history);
   }
 }
 
-async function closeUnpinnedTabs() {
-  const tabs = await chrome.tabs.query({ currentWindow: true });
+async function closeUnpinnedTabs(windowId) {
+  const tabs = await chrome.tabs.query({ windowId });
   const unpinnedTabIds = tabs.filter(tab => !tab.pinned).map(tab => tab.id);
 
   if (unpinnedTabIds.length === 0) {
     return;
   }
   if (unpinnedTabIds.length === tabs.length) {
-    await chrome.tabs.create({ active: true });
+    await chrome.tabs.create({ active: true, windowId });
   }
   await chrome.tabs.remove(unpinnedTabIds);
 }
 
-chrome.commands.onCommand.addListener(command => {
+chrome.commands.onCommand.addListener((command, tab) => {
+  const windowId = tab?.windowId;
+  if (windowId === undefined) {
+    return;
+  }
+
   enqueue(async () => {
     if (command === "toggle-last-tab") {
-      await toggleLastTab();
+      await toggleLastTab(windowId);
     } else if (command === "close-unpinned-tabs") {
-      await closeUnpinnedTabs();
+      await closeUnpinnedTabs(windowId);
     }
   });
 });

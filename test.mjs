@@ -104,6 +104,7 @@ function createHarness(initialTabs, options = {}) {
       async query(queryInfo) {
         return structuredClone(tabs.filter(tab =>
           (!queryInfo.currentWindow || tab.windowId === focusedWindowId) &&
+          (queryInfo.windowId === undefined || tab.windowId === queryInfo.windowId) &&
           (!queryInfo.active || tab.active)
         ));
       },
@@ -158,8 +159,11 @@ function createHarness(initialTabs, options = {}) {
       activate(tabId, true);
     },
     focusWindow,
-    command(name) {
-      onCommand.emit(name);
+    command(name, includeTab = true) {
+      const tab = includeTab
+        ? tabs.find(candidate => candidate.windowId === focusedWindowId && candidate.active)
+        : undefined;
+      onCommand.emit(name, tab && structuredClone(tab));
     },
     removeTabs,
     detach(tabId) {
@@ -273,6 +277,24 @@ test("tab history and commands use the focused window", async () => {
   assert.deepEqual(harness.tabs().filter(tab => tab.active).map(tab => tab.id), [1, 3]);
 });
 
+test("toggle command uses the invocation window after focus changes", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: false, pinned: false },
+    { id: 2, windowId: 10, active: true, pinned: false },
+    { id: 3, windowId: 20, active: true, pinned: false },
+  ], {
+    focusedWindowId: 10,
+    initialHistory: { 10: { current: 2, previous: 1 } },
+  });
+
+  harness.command("toggle-last-tab");
+  harness.focusWindow(20);
+  await harness.settle();
+
+  assert.equal(harness.tabs().find(tab => tab.windowId === 10 && tab.active).id, 1);
+  assert.equal(harness.tabs().find(tab => tab.windowId === 20 && tab.active).id, 3);
+});
+
 test("moving the previous tab removes it from its old window history", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
@@ -379,6 +401,23 @@ test("close command creates the replacement tab in the focused window", async ()
   ]);
 });
 
+test("close command uses the invocation window after focus changes", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+    { id: 2, windowId: 10, active: false, pinned: false },
+    { id: 3, windowId: 20, active: true, pinned: false },
+  ]);
+
+  harness.command("close-unpinned-tabs");
+  harness.focusWindow(20);
+  await harness.settle();
+
+  assert.deepEqual(harness.tabs().map(tab => [tab.id, tab.windowId]), [
+    [3, 20],
+    [100, 10],
+  ]);
+});
+
 test("tab removal emits removal and fallback activation events", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
@@ -397,6 +436,28 @@ test("tab removal emits removal and fallback activation events", async () => {
     "tabs.onActivated",
   ]);
   assert.equal(harness.storage().tabHistoryByWindow[10].current, 1);
+});
+
+test("commands do nothing when the invocation tab is unavailable", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+  ]);
+
+  harness.command("close-unpinned-tabs", false);
+  await harness.settle();
+  assert.deepEqual(harness.tabs().map(tab => tab.id), [1]);
+});
+
+test("commands do nothing when the invocation window closes while queued", async () => {
+  const harness = createHarness([
+    { id: 1, windowId: 10, active: true, pinned: false },
+    { id: 2, windowId: 20, active: true, pinned: false },
+  ]);
+
+  harness.command("close-unpinned-tabs");
+  harness.removeWindow(10);
+  await harness.settle();
+  assert.deepEqual(harness.tabs().map(tab => tab.id), [2]);
 });
 
 test("lifecycle simulations update tabs and emit browser events", async () => {
