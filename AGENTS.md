@@ -2,12 +2,12 @@
 
 ## Purpose and invariants
 
-This repository is a small Manifest V3 Microsoft Edge extension for keyboard-driven tab management. It toggles to the previously active tab and closes unpinned tabs in the current window.
+This repository is a small Manifest V3 Microsoft Edge extension that toggles to the previously active tab in the current window.
 
 - Preserve privacy and least privilege. The extension must not inspect or retain page contents, URLs, titles, browsing history, or other browsing metadata.
 - Keep manifest permissions minimal. Currently only `storage` is required; do not add host permissions, content scripts, telemetry, network access, or dependencies without an explicit product requirement.
 - Persist only numeric tab/window IDs, and only in `chrome.storage.session`.
-- Keep the close command unbound by default to prevent accidental destructive use.
+- Keep the extension focused on its single last-tab toggle command.
 
 ## Architecture and storage
 
@@ -27,16 +27,15 @@ All activation, removal, window-removal, and command work is serialized through 
 - Follow the existing plain JavaScript style: `const`/`let`, semicolons, concise arrow callbacks, async Chrome APIs, and small single-purpose functions.
 - Do not introduce tooling, generated output, abstractions, or dependencies unless the change requires them.
 - Treat Chrome and Edge as the same Chromium extension API surface, while keeping user-facing instructions Edge-specific.
-- Scope every command to the intended current window. Never activate, close, or create tabs in another window because focus changed during asynchronous work.
+- Scope the command to the intended current window. Never activate a tab in another window because focus changed during asynchronous work.
 - Carry a known `windowId` through follow-up operations and use explicit window constraints where the API supports them; do not replace scoped queries with global tab queries.
 - Before activating stored history, verify that the tab still exists and belongs to the active window.
 - Preserve lifecycle cleanup for removed tabs and windows.
-- Closing unpinned tabs must retain pinned tabs. If all tabs in the target window are unpinned, create a replacement tab in that same window before removing them so the window stays open.
 - Unknown commands and unavailable history must be no-ops.
 
 ## Tests and validation
 
-Add or update focused tests in `test.mjs` for every behavior change. Cover success and safe failure paths, especially serialization, stale/removed IDs, window isolation, activation toggling, pinned-tab retention, and replacement-tab ordering. Keep mocks faithful to the Chrome API behavior the test relies on.
+Add or update focused tests in `test.mjs` for every behavior change. Cover success and safe failure paths, especially serialization, stale/removed IDs, window isolation, activation toggling, and tab-ID replacement. Keep mocks faithful to the Chrome API behavior the test relies on.
 
 Run all of these commands from the repository root before finishing:
 
@@ -46,7 +45,7 @@ node --check service-worker.js
 node --test test.mjs
 ```
 
-For browser-facing behavior that the harness cannot represent, also load the unpacked extension in Edge and manually exercise multiple windows, tab removal, pinned tabs, and the configured shortcuts; report whether that manual check was performed.
+For browser-facing behavior that the harness cannot represent, also load the unpacked extension in Edge and manually exercise multiple windows, tab removal, and the configured shortcut; report whether that manual check was performed.
 
 ## Scope and documentation
 

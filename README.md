@@ -1,15 +1,12 @@
 # Edge Last Tab
 
-A small, permission-minimal Microsoft Edge extension for keyboard-driven tab
-management.
+A small, permission-minimal Microsoft Edge extension for toggling between the
+current and previously viewed tab.
 
-## Features
+## Feature
 
-- Toggle between the current and previously viewed tab in the current window.
-- Close every unpinned tab in the current window.
-- Configure both commands with Edge's native extension-shortcut settings.
-- Keep the window open by creating a new tab before closing tabs when no pinned
-  tab exists.
+Toggle between the current and previously viewed tab in the current window with
+a shortcut configured in Edge's native extension-shortcut settings.
 
 The extension stores only numeric tab and window IDs in session storage. It has
 no access to page contents, URLs, titles, or browsing history.
@@ -39,9 +36,6 @@ The suggested shortcut for **Toggle to the previously viewed tab** is:
 The manifest uses `MacCtrl+T` so macOS receives the Control key rather than
 Command-T, Edge's New Tab shortcut. Chromium reserves some browser shortcuts and
 may reject or ignore those combinations.
-
-The close-unpinned-tabs command is unbound by default so it cannot be triggered
-accidentally.
 
 After installing or restarting Edge, activate two different tabs before using
 the toggle command so the extension has history to switch between.

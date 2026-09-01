@@ -373,51 +373,6 @@ test("tab replacement preserves current and previous history", async () => {
   assert.equal(harness.tabs().find(tab => tab.active).id, 101);
 });
 
-test("close command retains pinned tabs in the focused window only", async () => {
-  const harness = createHarness([
-    { id: 1, windowId: 10, active: true, pinned: false },
-    { id: 2, windowId: 10, active: false, pinned: false },
-    { id: 3, windowId: 20, active: true, pinned: false },
-    { id: 4, windowId: 20, active: false, pinned: true },
-  ], { focusedWindowId: 20 });
-
-  harness.command("close-unpinned-tabs");
-  await harness.settle();
-  assert.deepEqual(harness.tabs().map(tab => tab.id), [1, 2, 4]);
-});
-
-test("close command creates the replacement tab in the focused window", async () => {
-  const harness = createHarness([
-    { id: 1, windowId: 10, active: true, pinned: false },
-    { id: 2, windowId: 20, active: true, pinned: false },
-    { id: 3, windowId: 20, active: false, pinned: false },
-  ], { focusedWindowId: 20 });
-
-  harness.command("close-unpinned-tabs");
-  await harness.settle();
-  assert.deepEqual(harness.tabs(), [
-    { id: 1, windowId: 10, active: true, pinned: false },
-    { id: 100, windowId: 20, active: true, pinned: false },
-  ]);
-});
-
-test("close command uses the invocation window after focus changes", async () => {
-  const harness = createHarness([
-    { id: 1, windowId: 10, active: true, pinned: false },
-    { id: 2, windowId: 10, active: false, pinned: false },
-    { id: 3, windowId: 20, active: true, pinned: false },
-  ]);
-
-  harness.command("close-unpinned-tabs");
-  harness.focusWindow(20);
-  await harness.settle();
-
-  assert.deepEqual(harness.tabs().map(tab => [tab.id, tab.windowId]), [
-    [3, 20],
-    [100, 10],
-  ]);
-});
-
 test("tab removal emits removal and fallback activation events", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
@@ -438,23 +393,23 @@ test("tab removal emits removal and fallback activation events", async () => {
   assert.equal(harness.storage().tabHistoryByWindow[10].current, 1);
 });
 
-test("commands do nothing when the invocation tab is unavailable", async () => {
+test("command does nothing when the invocation tab is unavailable", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
   ]);
 
-  harness.command("close-unpinned-tabs", false);
+  harness.command("toggle-last-tab", false);
   await harness.settle();
   assert.deepEqual(harness.tabs().map(tab => tab.id), [1]);
 });
 
-test("commands do nothing when the invocation window closes while queued", async () => {
+test("command does nothing when the invocation window closes while queued", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
     { id: 2, windowId: 20, active: true, pinned: false },
   ]);
 
-  harness.command("close-unpinned-tabs");
+  harness.command("toggle-last-tab");
   harness.removeWindow(10);
   await harness.settle();
   assert.deepEqual(harness.tabs().map(tab => tab.id), [2]);

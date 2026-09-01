@@ -166,30 +166,15 @@ async function toggleLastTab(windowId) {
   }
 }
 
-async function closeUnpinnedTabs(windowId) {
-  const tabs = await chrome.tabs.query({ windowId });
-  const unpinnedTabIds = tabs.filter(tab => !tab.pinned).map(tab => tab.id);
-
-  if (unpinnedTabIds.length === 0) {
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== "toggle-last-tab") {
     return;
   }
-  if (unpinnedTabIds.length === tabs.length) {
-    await chrome.tabs.create({ active: true, windowId });
-  }
-  await chrome.tabs.remove(unpinnedTabIds);
-}
 
-chrome.commands.onCommand.addListener((command, tab) => {
   const windowId = tab?.windowId;
   if (windowId === undefined) {
     return;
   }
 
-  enqueue(async () => {
-    if (command === "toggle-last-tab") {
-      await toggleLastTab(windowId);
-    } else if (command === "close-unpinned-tabs") {
-      await closeUnpinnedTabs(windowId);
-    }
-  });
+  enqueue(() => toggleLastTab(windowId));
 });

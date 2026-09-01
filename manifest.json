@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Last Tab",
   "version": "1.0.0",
-  "description": "Toggle to the previously viewed tab and close unpinned tabs with configurable shortcuts.",
+  "description": "Toggle to the previously viewed tab with a configurable shortcut.",
   "permissions": ["storage"],
   "background": {
     "service_worker": "service-worker.js"
@@ -14,9 +14,6 @@
         "mac": "MacCtrl+T"
       },
       "description": "Toggle to the previously viewed tab"
-    },
-    "close-unpinned-tabs": {
-      "description": "Close all unpinned tabs in the current window"
     }
   }
 }
