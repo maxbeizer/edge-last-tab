@@ -1,12 +1,13 @@
 # Edge Last Tab
 
-A small, permission-minimal Microsoft Edge extension for toggling between the
-current and previously viewed tab.
+A small, permission-minimal Microsoft Edge extension for walking backward
+through recently viewed tabs.
 
 ## Feature
 
-Toggle between the current and previously viewed tab in the current window with
-a shortcut configured in Edge's native extension-shortcut settings.
+Press the configured shortcut repeatedly to walk backward through recently
+viewed tabs in the current window. After reaching the oldest retained tab, the
+shortcut cycles back to the tab where you started.
 
 The extension stores only numeric tab and window IDs in session storage. It has
 no access to page contents, URLs, titles, or browsing history.
@@ -28,7 +29,7 @@ no access to page contents, URLs, titles, or browsing history.
 
 Open `edge://extensions/shortcuts` and assign any key combination Edge accepts.
 
-The suggested shortcut for **Toggle to the previously viewed tab** is:
+The suggested shortcut for **Go back through recently viewed tabs** is:
 
 - macOS: `Control-T`
 - Other platforms: `Control-Shift-L`
@@ -37,8 +38,8 @@ The manifest uses `MacCtrl+T` so macOS receives the Control key rather than
 Command-T, Edge's New Tab shortcut. Chromium reserves some browser shortcuts and
 may reject or ignore those combinations.
 
-After installing or restarting Edge, activate two different tabs before using
-the toggle command so the extension has history to switch between.
+After installing or restarting Edge, activate tabs normally to build the
+session history used by the command.
 
 ## Development
 

@@ -14,44 +14,42 @@ async function saveHistory(history) {
   await chrome.storage.session.set({ [STORAGE_KEY]: history });
 }
 
-function recordActivation(history, windowId, tabId) {
-  const key = String(windowId);
-  const entry = history[key] || {};
+function tabIds(entry = {}) {
+  return [entry.current, entry.previous, ...(entry.older || [])]
+    .filter((tabId, index, ids) => tabId !== undefined && ids.indexOf(tabId) === index);
+}
 
-  if (entry.current === tabId) {
+function setTabIds(history, windowId, ids) {
+  const key = String(windowId);
+  if (ids.length === 0) {
+    delete history[key];
+    return;
+  }
+
+  const [current, previous, ...older] = ids;
+  history[key] = { current };
+  if (previous !== undefined) history[key].previous = previous;
+  if (older.length) history[key].older = older;
+}
+
+function recordActivation(history, windowId, tabId) {
+  const ids = tabIds(history[String(windowId)]);
+  if (ids[0] === tabId) {
     return false;
   }
-  if (entry.current === undefined) {
-    delete entry.previous;
-  } else {
-    entry.previous = entry.current;
-  }
-  entry.current = tabId;
-  history[key] = entry;
+
+  setTabIds(history, windowId, [tabId, ...ids.filter(id => id !== tabId)]);
   return true;
 }
 
 function removeTabReference(history, windowId, tabId) {
-  const key = String(windowId);
-  const entry = history[key];
-
-  if (!entry) {
+  const entry = history[String(windowId)];
+  if (!entry || !tabIds(entry).includes(tabId)) {
     return false;
   }
 
-  let changed = false;
-  if (entry.previous === tabId) {
-    delete entry.previous;
-    changed = true;
-  }
-  if (entry.current === tabId) {
-    delete entry.current;
-    changed = true;
-  }
-  if (entry.current === undefined && entry.previous === undefined) {
-    delete history[key];
-  }
-  return changed;
+  setTabIds(history, windowId, tabIds(entry).filter(id => id !== tabId));
+  return true;
 }
 
 chrome.tabs.onActivated.addListener(activeInfo => {
@@ -112,13 +110,10 @@ chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
     const history = await loadHistory();
     let changed = false;
 
-    for (const entry of Object.values(history)) {
-      if (entry.current === removedTabId) {
-        entry.current = addedTabId;
-        changed = true;
-      }
-      if (entry.previous === removedTabId) {
-        entry.previous = addedTabId;
+    for (const [windowId, entry] of Object.entries(history)) {
+      const ids = tabIds(entry);
+      if (ids.includes(removedTabId)) {
+        setTabIds(history, windowId, ids.map(id => id === removedTabId ? addedTabId : id));
         changed = true;
       }
     }
@@ -144,26 +139,27 @@ async function toggleLastTab(windowId) {
   }
 
   const history = await loadHistory();
-  const previousTabId = history[String(windowId)]?.previous;
-  if (previousTabId === undefined) {
-    return;
-  }
+  const ids = tabIds(history[String(windowId)]);
 
-  try {
-    const previousTab = await chrome.tabs.get(previousTabId);
-    if (previousTab.windowId === windowId) {
-      await chrome.tabs.update(previousTabId, { active: true });
-      return;
+  while (ids.length > 1) {
+    const previousTabId = ids[1];
+    try {
+      const previousTab = await chrome.tabs.get(previousTabId);
+      if (previousTab.windowId === windowId) {
+        ids.push(ids.shift());
+        setTabIds(history, windowId, ids);
+        await chrome.tabs.update(previousTabId, { active: true });
+        await saveHistory(history);
+        return;
+      }
+    } catch {
+      // Remove stale entries and continue farther back in history.
     }
-  } catch {
-    // The stale entry is removed below.
+    ids.splice(1, 1);
   }
 
-  const entry = history[String(windowId)];
-  if (entry?.previous === previousTabId) {
-    delete entry.previous;
-    await saveHistory(history);
-  }
+  setTabIds(history, windowId, ids);
+  await saveHistory(history);
 }
 
 chrome.commands.onCommand.addListener((command, tab) => {

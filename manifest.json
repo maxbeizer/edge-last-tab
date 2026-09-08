@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Last Tab",
-  "version": "1.0.0",
-  "description": "Toggle to the previously viewed tab with a configurable shortcut.",
+  "version": "1.1.0",
+  "description": "Walk backward through recently viewed tabs with a configurable shortcut.",
   "permissions": ["storage"],
   "background": {
     "service_worker": "service-worker.js"
@@ -13,7 +13,7 @@
         "default": "Ctrl+Shift+L",
         "mac": "MacCtrl+T"
       },
-      "description": "Toggle to the previously viewed tab"
+      "description": "Go back through recently viewed tabs"
     }
   }
 }

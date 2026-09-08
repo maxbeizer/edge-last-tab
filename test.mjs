@@ -223,26 +223,29 @@ function createHarness(initialTabs, options = {}) {
   };
 }
 
-test("repeated commands toggle between the two most recent tabs", async () => {
+test("repeated commands walk backward through tab history", async () => {
   const harness = createHarness([
     { id: 1, windowId: 10, active: true, pinned: false },
     { id: 2, windowId: 10, active: false, pinned: false },
+    { id: 3, windowId: 10, active: false, pinned: false },
   ]);
 
   harness.activate(2);
-  await harness.settle();
+  harness.activate(3);
   harness.activate(1);
-  await harness.settle();
-  harness.activate(2);
   await harness.settle();
 
   harness.command("toggle-last-tab");
   await harness.settle();
-  assert.equal(harness.tabs().find(tab => tab.active).id, 1);
+  assert.equal(harness.tabs().find(tab => tab.active).id, 3);
 
   harness.command("toggle-last-tab");
   await harness.settle();
   assert.equal(harness.tabs().find(tab => tab.active).id, 2);
+
+  harness.command("toggle-last-tab");
+  await harness.settle();
+  assert.equal(harness.tabs().find(tab => tab.active).id, 1);
 });
 
 test("tab history and commands use the focused window", async () => {
@@ -333,7 +336,7 @@ test("moving the current tab reconciles both windows", async () => {
 
   assert.deepEqual(harness.storage().tabHistoryByWindow, {
     10: { current: 1 },
-    20: { current: 2, previous: 3 },
+    20: { current: 2, previous: 3, older: [4] },
   });
 });
 
